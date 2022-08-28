@@ -32,7 +32,8 @@ const (
 	// MetaFilename is the known JSON filename for meta information.
 	MetaFilename = "meta.json"
 	// IndexFilename is the known index file for block index.
-	IndexFilename = "index"
+	IndexFilename      = "index"
+	TombstonesFilename = "tombstones"
 	// IndexHeaderFilename is the canonical name for binary index header file that stores essential information.
 	IndexHeaderFilename = "index-header"
 	// ChunksDirname is the known dir name for chunks with compressed samples.
@@ -94,21 +95,21 @@ func Download(ctx context.Context, logger log.Logger, bucket objstore.Bucket, id
 
 // Upload uploads a TSDB block to the object storage. It verifies basic
 // features of Thanos block.
-func Upload(ctx context.Context, logger log.Logger, bkt objstore.Bucket, bdir string, hf metadata.HashFunc, options ...objstore.UploadOption) error {
-	return upload(ctx, logger, bkt, bdir, hf, true, options...)
+func Upload(ctx context.Context, logger log.Logger, bkt objstore.Bucket, bdir string, hf metadata.HashFunc, expectedUser string, options ...objstore.UploadOption) error {
+	return upload(ctx, logger, bkt, bdir, hf, true, expectedUser, options...)
 }
 
 // UploadPromBlock uploads a TSDB block to the object storage. It assumes
 // the block is used in Prometheus so it doesn't check Thanos external labels.
-func UploadPromBlock(ctx context.Context, logger log.Logger, bkt objstore.Bucket, bdir string, hf metadata.HashFunc, options ...objstore.UploadOption) error {
-	return upload(ctx, logger, bkt, bdir, hf, false, options...)
+func UploadPromBlock(ctx context.Context, logger log.Logger, bkt objstore.Bucket, bdir string, hf metadata.HashFunc, expectedUser string, options ...objstore.UploadOption) error {
+	return upload(ctx, logger, bkt, bdir, hf, false, expectedUser, options...)
 }
 
 // upload uploads block from given block dir that ends with block id.
 // It makes sure cleanup is done on error to avoid partial block uploads.
 // TODO(bplotka): Ensure bucket operations have reasonable backoff retries.
 // NOTE: Upload updates `meta.Thanos.File` section.
-func upload(ctx context.Context, logger log.Logger, bkt objstore.Bucket, bdir string, hf metadata.HashFunc, checkExternalLabels bool, options ...objstore.UploadOption) error {
+func upload(ctx context.Context, logger log.Logger, bkt objstore.Bucket, bdir string, hf metadata.HashFunc, checkExternalLabels bool, expectedUser string, options ...objstore.UploadOption) error {
 	df, err := os.Stat(bdir)
 	if err != nil {
 		return err
@@ -136,25 +137,29 @@ func upload(ctx context.Context, logger log.Logger, bkt objstore.Bucket, bdir st
 	}
 
 	metaEncoded := strings.Builder{}
-	meta.Thanos.Files, err = GatherFileStats(bdir, hf, logger)
-	if err != nil {
-		return errors.Wrap(err, "gather meta file stats")
-	}
+	// meta.Thanos.Files, err = GatherFileStats(bdir, hf, logger)
+	// if err != nil {
+	// 	return errors.Wrap(err, "gather meta file stats")
+	// }
 
 	if err := meta.Write(&metaEncoded); err != nil {
 		return errors.Wrap(err, "encode meta file")
 	}
 
-	if err := objstore.UploadDir(ctx, logger, bkt, filepath.Join(bdir, ChunksDirname), path.Join(id.String(), ChunksDirname), options...); err != nil {
+	if err := objstore.UploadDir(ctx, logger, bkt, filepath.Join(bdir, ChunksDirname), path.Join(expectedUser, id.String(), ChunksDirname), options...); err != nil {
 		return cleanUp(logger, bkt, id, errors.Wrap(err, "upload chunks"))
 	}
 
-	if err := objstore.UploadFile(ctx, logger, bkt, filepath.Join(bdir, IndexFilename), path.Join(id.String(), IndexFilename)); err != nil {
+	if err := objstore.UploadFile(ctx, logger, bkt, filepath.Join(bdir, IndexFilename), path.Join(expectedUser, id.String(), IndexFilename)); err != nil {
 		return cleanUp(logger, bkt, id, errors.Wrap(err, "upload index"))
 	}
 
+	if err := objstore.UploadFile(ctx, logger, bkt, filepath.Join(bdir, TombstonesFilename), path.Join(expectedUser, id.String(), TombstonesFilename)); err != nil {
+		return cleanUp(logger, bkt, id, errors.Wrap(err, "upload tombstones"))
+	}
+
 	// Meta.json always need to be uploaded as a last item. This will allow to assume block directories without meta file to be pending uploads.
-	if err := bkt.Upload(ctx, path.Join(id.String(), MetaFilename), strings.NewReader(metaEncoded.String())); err != nil {
+	if err := bkt.Upload(ctx, path.Join(expectedUser, id.String(), MetaFilename), strings.NewReader(metaEncoded.String())); err != nil {
 		// Don't call cleanUp here. Despite getting error, meta.json may have been uploaded in certain cases,
 		// and even though cleanUp will not see it yet, meta.json may appear in the bucket later.
 		// (Eg. S3 is known to behave this way when it returns 503 "SlowDown" error).

@@ -1229,11 +1229,11 @@ func registerBucketRewrite(app extkingpin.AppClause, objStoreConfig *extflag.Pat
 
 				level.Info(logger).Log("msg", "uploading new block", "source", id, "new", newID)
 				if tbc.promBlocks {
-					if err := block.UploadPromBlock(ctx, logger, bkt, filepath.Join(tbc.tmpDir, newID.String()), metadata.HashFunc(*hashFunc)); err != nil {
+					if err := block.UploadPromBlock(ctx, logger, bkt, filepath.Join(tbc.tmpDir, newID.String()), metadata.HashFunc(*hashFunc), "fake"); err != nil {
 						return errors.Wrap(err, "upload")
 					}
 				} else {
-					if err := block.Upload(ctx, logger, bkt, filepath.Join(tbc.tmpDir, newID.String()), metadata.HashFunc(*hashFunc)); err != nil {
+					if err := block.Upload(ctx, logger, bkt, filepath.Join(tbc.tmpDir, newID.String()), metadata.HashFunc(*hashFunc), "fake"); err != nil {
 						return errors.Wrap(err, "upload")
 					}
 				}

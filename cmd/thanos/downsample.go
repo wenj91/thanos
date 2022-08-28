@@ -387,7 +387,7 @@ func processDownsampling(
 
 	begin = time.Now()
 
-	err = block.Upload(ctx, logger, bkt, resdir, hashFunc)
+	err = block.Upload(ctx, logger, bkt, resdir, hashFunc, "fake")
 	if err != nil {
 		return errors.Wrapf(err, "upload downsampled block %s", id)
 	}

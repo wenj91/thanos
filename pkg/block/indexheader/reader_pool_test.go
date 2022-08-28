@@ -52,7 +52,7 @@ func TestReaderPool_NewBinaryReader(t *testing.T) {
 		{{Name: "a", Value: "2"}},
 	}, 100, 0, 1000, labels.Labels{{Name: "ext1", Value: "1"}}, 124, metadata.NoneFunc)
 	testutil.Ok(t, err)
-	testutil.Ok(t, block.Upload(ctx, log.NewNopLogger(), bkt, filepath.Join(tmpDir, blockID.String()), metadata.NoneFunc))
+	testutil.Ok(t, block.Upload(ctx, log.NewNopLogger(), bkt, filepath.Join(tmpDir, blockID.String()), metadata.NoneFunc, "fake"))
 
 	for testName, testData := range tests {
 		t.Run(testName, func(t *testing.T) {
@@ -88,7 +88,7 @@ func TestReaderPool_ShouldCloseIdleLazyReaders(t *testing.T) {
 		{{Name: "a", Value: "2"}},
 	}, 100, 0, 1000, labels.Labels{{Name: "ext1", Value: "1"}}, 124, metadata.NoneFunc)
 	testutil.Ok(t, err)
-	testutil.Ok(t, block.Upload(ctx, log.NewNopLogger(), bkt, filepath.Join(tmpDir, blockID.String()), metadata.NoneFunc))
+	testutil.Ok(t, block.Upload(ctx, log.NewNopLogger(), bkt, filepath.Join(tmpDir, blockID.String()), metadata.NoneFunc, "fake"))
 
 	metrics := NewReaderPoolMetrics(nil)
 	pool := NewReaderPool(log.NewNopLogger(), true, idleTimeout, metrics)

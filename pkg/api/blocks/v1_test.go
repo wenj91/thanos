@@ -109,7 +109,7 @@ func TestMarkBlockEndpoint(t *testing.T) {
 	// upload block
 	bkt := objstore.WithNoopInstr(objstore.NewInMemBucket())
 	logger := log.NewNopLogger()
-	testutil.Ok(t, block.Upload(ctx, logger, bkt, path.Join(tmpDir, b1.String()), metadata.NoneFunc))
+	testutil.Ok(t, block.Upload(ctx, logger, bkt, path.Join(tmpDir, b1.String()), metadata.NoneFunc, "fake"))
 
 	now := time.Now()
 	api := &BlocksAPI{

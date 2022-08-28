@@ -8,6 +8,7 @@ package shipper
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"os"
 	"path"
@@ -73,12 +74,13 @@ func newMetrics(reg prometheus.Registerer, uploadCompacted bool) *metrics {
 // Shipper watches a directory for matching files and directories and uploads
 // them to a remote data store.
 type Shipper struct {
-	logger  log.Logger
-	dir     string
-	metrics *metrics
-	bucket  objstore.Bucket
-	labels  func() labels.Labels
-	source  metadata.SourceType
+	logger       log.Logger
+	dir          string
+	metrics      *metrics
+	bucket       objstore.Bucket
+	labels       func() labels.Labels
+	source       metadata.SourceType
+	expectedUser string
 
 	uploadCompacted        bool
 	allowOutOfOrderUploads bool
@@ -92,6 +94,7 @@ func New(
 	logger log.Logger,
 	r prometheus.Registerer,
 	dir string,
+	expectedUser string,
 	bucket objstore.Bucket,
 	lbls func() labels.Labels,
 	source metadata.SourceType,
@@ -109,6 +112,7 @@ func New(
 	return &Shipper{
 		logger:                 logger,
 		dir:                    dir,
+		expectedUser:           expectedUser,
 		bucket:                 bucket,
 		labels:                 lbls,
 		metrics:                newMetrics(r, uploadCompacted),
@@ -297,10 +301,10 @@ func (s *Shipper) Sync(ctx context.Context) (uploaded int, err error) {
 			}
 		}
 
-		if err := s.upload(ctx, m); err != nil {
-			if !s.allowOutOfOrderUploads {
-				return 0, errors.Wrapf(err, "upload %v", m.ULID)
-			}
+		if err := s.upload(ctx, m, s.expectedUser); err != nil {
+			// if !s.allowOutOfOrderUploads {
+			// 	return 0, errors.Wrapf(err, "upload %v", m.ULID)
+			// }
 
 			// No error returned, just log line. This is because we want other blocks to be uploaded even
 			// though this one failed. It will be retried on second Sync iteration.
@@ -328,9 +332,34 @@ func (s *Shipper) Sync(ctx context.Context) (uploaded int, err error) {
 	return uploaded, nil
 }
 
+const TenantIDExternalLabel = "__org_id__"
+
+func convertMetadata(meta metadata.Meta, expectedUser string) (*metadata.Meta, []string) {
+	var changesRequired []string
+
+	org, ok := meta.Thanos.Labels[TenantIDExternalLabel]
+	if !ok {
+		changesRequired = append(changesRequired, "add __org_id__ label")
+	} else if org != expectedUser {
+		changesRequired = append(changesRequired, fmt.Sprintf("change __org_id__ from %s to %s", org, expectedUser))
+	}
+
+	// remove __org_id__ so that we can see if there are any other labels
+	delete(meta.Thanos.Labels, TenantIDExternalLabel)
+	if len(meta.Thanos.Labels) > 0 {
+		changesRequired = append(changesRequired, "remove extra Thanos labels")
+	}
+
+	meta.Thanos.Labels = map[string]string{
+		TenantIDExternalLabel: expectedUser,
+	}
+
+	return &meta, changesRequired
+}
+
 // sync uploads the block if not exists in remote storage.
 // TODO(khyatisoneji): Double check if block does not have deletion-mark.json for some reason, otherwise log it or return error.
-func (s *Shipper) upload(ctx context.Context, meta *metadata.Meta) error {
+func (s *Shipper) upload(ctx context.Context, meta *metadata.Meta, expectedUser string) error {
 	level.Info(s.logger).Log("msg", "upload new block", "id", meta.ULID)
 
 	// We hard-link the files into a temporary upload directory so we are not affected
@@ -354,16 +383,19 @@ func (s *Shipper) upload(ctx context.Context, meta *metadata.Meta) error {
 	if err := hardlinkBlock(dir, updir); err != nil {
 		return errors.Wrap(err, "hard link block")
 	}
-	// Attach current labels and write a new meta file with Thanos extensions.
-	if lset := s.labels(); lset != nil {
-		meta.Thanos.Labels = lset.Map()
-	}
-	meta.Thanos.Source = s.source
-	meta.Thanos.SegmentFiles = block.GetSegmentFiles(updir)
+	// // Attach current labels and write a new meta file with Thanos extensions.
+	// if lset := s.labels(); lset != nil {
+	// 	meta.Thanos.Labels = lset.Map()
+	// }
+	// meta.Thanos.Source = s.source
+	// meta.Thanos.SegmentFiles = block.GetSegmentFiles(updir)
+
+	meta, _ = convertMetadata(*meta, expectedUser)
+
 	if err := meta.WriteToDir(s.logger, updir); err != nil {
 		return errors.Wrap(err, "write meta file")
 	}
-	return block.Upload(ctx, s.logger, s.bucket, updir, s.hashFunc)
+	return block.Upload(ctx, s.logger, s.bucket, updir, s.hashFunc, expectedUser)
 }
 
 // blockMetasFromOldest returns the block meta of each block found in dir
@@ -420,7 +452,7 @@ func hardlinkBlock(src, dst string) error {
 	for i, fn := range files {
 		files[i] = filepath.Join(block.ChunksDirname, fn)
 	}
-	files = append(files, block.MetaFilename, block.IndexFilename)
+	files = append(files, block.MetaFilename, block.IndexFilename, block.TombstonesFilename)
 
 	for _, fn := range files {
 		if err := os.Link(filepath.Join(src, fn), filepath.Join(dst, fn)); err != nil {

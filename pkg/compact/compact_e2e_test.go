@@ -436,7 +436,7 @@ func createAndUpload(t testing.TB, bkt objstore.Bucket, blocks []blockgenSpec, b
 	for _, b := range blocks {
 		id, meta := createBlock(t, ctx, prepareDir, b)
 		metas = append(metas, meta)
-		testutil.Ok(t, block.Upload(ctx, log.NewNopLogger(), bkt, filepath.Join(prepareDir, id.String()), metadata.NoneFunc))
+		testutil.Ok(t, block.Upload(ctx, log.NewNopLogger(), bkt, filepath.Join(prepareDir, id.String()), metadata.NoneFunc, "fake"))
 	}
 	for _, b := range blocksWithOutOfOrderChunks {
 		id, meta := createBlock(t, ctx, prepareDir, b)
@@ -445,7 +445,7 @@ func createAndUpload(t testing.TB, bkt objstore.Bucket, blocks []blockgenSpec, b
 		testutil.Ok(t, err)
 
 		metas = append(metas, meta)
-		testutil.Ok(t, block.Upload(ctx, log.NewNopLogger(), bkt, filepath.Join(prepareDir, id.String()), metadata.NoneFunc))
+		testutil.Ok(t, block.Upload(ctx, log.NewNopLogger(), bkt, filepath.Join(prepareDir, id.String()), metadata.NoneFunc, "fake"))
 	}
 
 	return metas

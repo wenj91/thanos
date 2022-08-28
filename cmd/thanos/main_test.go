@@ -122,7 +122,7 @@ func TestRegression4960_Deadlock(t *testing.T) {
 			labels.Labels{{Name: "e1", Value: "1"}},
 			downsample.ResLevel0, metadata.NoneFunc)
 		testutil.Ok(t, err)
-		testutil.Ok(t, block.Upload(ctx, logger, bkt, path.Join(dir, id.String()), metadata.NoneFunc))
+		testutil.Ok(t, block.Upload(ctx, logger, bkt, path.Join(dir, id.String()), metadata.NoneFunc, "fake"))
 	}
 	{
 		id2, err = e2eutil.CreateBlock(
@@ -133,7 +133,7 @@ func TestRegression4960_Deadlock(t *testing.T) {
 			labels.Labels{{Name: "e1", Value: "2"}},
 			downsample.ResLevel0, metadata.NoneFunc)
 		testutil.Ok(t, err)
-		testutil.Ok(t, block.Upload(ctx, logger, bkt, path.Join(dir, id2.String()), metadata.NoneFunc))
+		testutil.Ok(t, block.Upload(ctx, logger, bkt, path.Join(dir, id2.String()), metadata.NoneFunc, "fake"))
 	}
 	{
 		id3, err = e2eutil.CreateBlock(
@@ -144,7 +144,7 @@ func TestRegression4960_Deadlock(t *testing.T) {
 			labels.Labels{{Name: "e1", Value: "2"}},
 			downsample.ResLevel0, metadata.NoneFunc)
 		testutil.Ok(t, err)
-		testutil.Ok(t, block.Upload(ctx, logger, bkt, path.Join(dir, id3.String()), metadata.NoneFunc))
+		testutil.Ok(t, block.Upload(ctx, logger, bkt, path.Join(dir, id3.String()), metadata.NoneFunc, "fake"))
 	}
 
 	meta, err := block.DownloadMeta(ctx, logger, bkt, id)
@@ -183,7 +183,7 @@ func TestCleanupDownsampleCacheFolder(t *testing.T) {
 			labels.Labels{{Name: "e1", Value: "1"}},
 			downsample.ResLevel0, metadata.NoneFunc)
 		testutil.Ok(t, err)
-		testutil.Ok(t, block.Upload(ctx, logger, bkt, path.Join(dir, id.String()), metadata.NoneFunc))
+		testutil.Ok(t, block.Upload(ctx, logger, bkt, path.Join(dir, id.String()), metadata.NoneFunc, "fake"))
 	}
 
 	meta, err := block.DownloadMeta(ctx, logger, bkt, id)
